@@ -1,0 +1,504 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><style>body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style></head><body><title>The Sky Map of Us</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a star chart that scrolls sideways through time; each memory is a star, joined into one constellation as she visits them. A bottom sheet holds the story. */
+:root {
+  --ink: #f6f1e7;
+  --ink-soft: rgba(246, 241, 231, 0.76);
+  --ink-faint: rgba(246, 241, 231, 0.45);
+  --gold: #ffd59e;
+  --deep: #050817;
+  --sheet: rgba(14, 18, 44, 0.82);
+  --line: rgba(190, 205, 255, 0.18);
+  --font-display: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+  --font-body: "Figtree", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: var(--deep); color: var(--ink);
+  font-family: var(--font-body); overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+#stage {
+  position: fixed; inset: 0; overflow: hidden; touch-action: pan-y; cursor: grab;
+  background: radial-gradient(120% 90% at 50% 0%, #121a46 0%, #080c26 55%, var(--deep) 100%);
+}
+#stage.dragging { cursor: grabbing; }
+#sky { position: absolute; inset: 0; width: 100%; height: 100%; }
+#layer { position: absolute; left: 0; top: 0; will-change: transform; }
+
+/* ---------- memory stars ---------- */
+.star {
+  position: absolute; width: 56px; height: 56px; margin: -28px 0 0 -28px;
+  border: 0; padding: 0; background: none; cursor: pointer; color: var(--ink);
+  display: grid; place-items: center;
+}
+.star .dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #fff8ea;
+  box-shadow: 0 0 10px 3px rgba(255, 220, 170, .6), 0 0 28px 8px rgba(255, 200, 140, .2);
+  transition: transform .6s ease, opacity .6s ease, box-shadow .6s ease;
+}
+.star .lab {
+  position: absolute; top: 46px; left: 50%; transform: translateX(-50%);
+  white-space: nowrap; pointer-events: none;
+  font: 500 .66rem/1.4 var(--font-mono); letter-spacing: .12em; text-transform: uppercase;
+  color: var(--ink-faint); text-align: center; transition: color .6s ease, opacity .6s ease;
+}
+.star .lab b { display: block; font-family: var(--font-display); font-style: italic; font-weight: 400; font-size: 1.05rem; letter-spacing: 0; text-transform: none; color: var(--gold); }
+.star.locked { cursor: default; }
+.star.locked .dot { opacity: .35; transform: scale(.55); box-shadow: none; }
+.star.locked .lab { opacity: 0; }
+.star.next .dot { animation: beckon 1.8s ease-in-out infinite; }
+.star.next .lab { color: var(--gold); }
+.star.current .dot { transform: scale(1.5); box-shadow: 0 0 16px 6px rgba(255, 220, 170, .8), 0 0 50px 16px rgba(255, 200, 140, .3); }
+.star.today .dot { width: 16px; height: 16px; }
+.star.today.current .dot { transform: scale(1.8); }
+.star:focus-visible { outline: 1px dashed var(--gold); outline-offset: 2px; border-radius: 50%; }
+@keyframes beckon {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 10px 3px rgba(255, 220, 170, .6); }
+  50% { transform: scale(1.35); box-shadow: 0 0 20px 8px rgba(255, 220, 170, .85), 0 0 50px 18px rgba(255, 200, 140, .25); }
+}
+
+/* ---------- chart header ---------- */
+#chart-head {
+  position: absolute; left: 0; right: 0; top: 0;
+  padding: calc(14px + env(safe-area-inset-top, 0px)) 16px 0;
+  display: flex; justify-content: space-between; gap: 12px; pointer-events: none;
+  font: 400 .66rem/1.5 var(--font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint);
+}
+#chart-head span:last-child { text-align: right; }
+
+/* ---------- intro ---------- */
+#intro {
+  position: absolute; inset: 0; display: grid; place-items: center; padding-inline: 16px;
+  background: radial-gradient(60% 50% at 50% 50%, rgba(5, 8, 23, .55), rgba(5, 8, 23, .2));
+  transition: opacity 1.2s ease;
+}
+#intro.gone { opacity: 0; pointer-events: none; }
+.intro-box { max-width: 30rem; text-align: center; }
+.intro-box > * { animation: rise 1.4s cubic-bezier(.2,.7,.2,1) both; }
+.intro-box > *:nth-child(2) { animation-delay: .3s; }
+.intro-box > *:nth-child(3) { animation-delay: .7s; }
+.intro-box > *:nth-child(4) { animation-delay: 1.1s; }
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+.eyebrow {
+  margin: 0 0 .7rem; font: 500 .7rem/1.4 var(--font-mono);
+  letter-spacing: .18em; text-transform: uppercase; color: var(--gold); font-variant-numeric: tabular-nums;
+}
+h1, h2 { margin: 0; font-family: var(--font-display); font-weight: 400; line-height: 1.04; text-wrap: balance; }
+h1 { font-size: clamp(2.8rem, 10vw, 4.8rem); }
+h2 { font-size: clamp(1.8rem, 6.4vw, 2.6rem); }
+h1 em, h2 em { color: var(--gold); }
+.intro-box p:not(.eyebrow) { margin: 1rem auto 1.4rem; color: var(--ink-soft); font-size: 1.04rem; line-height: 1.6; }
+
+/* ---------- story sheet ---------- */
+#sheet {
+  position: absolute; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  width: min(34rem, calc(100% - 32px)); transform: translate(-50%, 0);
+  background: var(--sheet); border: 1px solid var(--line); border-radius: 18px;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .45);
+  transition: transform .9s cubic-bezier(.2,.7,.2,1), opacity .9s ease;
+  cursor: auto;
+}
+#sheet.away { transform: translate(-50%, 30px); opacity: 0; pointer-events: none; }
+#story { padding: 1.1rem 1.25rem .4rem; max-height: min(44vh, 26rem); overflow-y: auto; }
+#story.swap > * { animation: rise .9s cubic-bezier(.2,.7,.2,1) both; }
+#story.swap > *:nth-child(2) { animation-delay: .12s; }
+#story.swap > *:nth-child(3) { animation-delay: .24s; }
+#story.swap > *:nth-child(4) { animation-delay: .36s; }
+#story.swap > *:nth-child(5) { animation-delay: .48s; }
+#story img { display: block; width: 100%; max-height: 24vh; object-fit: cover; border-radius: 10px; margin-top: .9rem; }
+#story p { margin: .75rem 0 0; line-height: 1.6; color: var(--ink-soft); text-wrap: pretty; }
+#story .sign { font-family: var(--font-display); font-style: italic; font-size: 1.25rem; color: var(--gold); }
+.mag { color: var(--ink-faint); }
+
+.actions { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1rem; }
+#nav {
+  display: flex; align-items: center; gap: 10px;
+  padding: .7rem 1.25rem .95rem; border-top: 1px solid var(--line);
+}
+#count { flex: 1; text-align: center; font: 500 .7rem/1 var(--font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+
+.btn {
+  font: 600 .92rem/1 var(--font-body); color: #1c1638;
+  background: var(--ink); border: 0; border-radius: 999px;
+  padding: .8rem 1.2rem; cursor: pointer; white-space: nowrap;
+  transition: transform .2s ease, opacity .3s ease;
+}
+.btn:hover { transform: translateY(-1px); }
+.btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.btn:disabled { opacity: .35; cursor: default; transform: none; }
+.btn.ghost { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
+.btn.gold { background: var(--gold); }
+
+#hint {
+  position: absolute; left: 0; right: 0; top: calc(44px + env(safe-area-inset-top, 0px));
+  text-align: center; font: 400 .66rem/1 var(--font-mono); letter-spacing: .14em; text-transform: uppercase;
+  color: var(--ink-faint); pointer-events: none; transition: opacity 1s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01s !important; animation-iteration-count: 1 !important; transition-duration: .2s !important; }
+}
+</style>
+
+<div id="stage">
+  <canvas id="sky" aria-hidden="true"></canvas>
+  <div id="layer"></div>
+
+  <div id="chart-head" aria-hidden="true">
+    <span>Chart of the northern sky<br>drawn for <span data-name></span></span>
+    <span id="coords">RA 00h 00m<br>Dec +40°</span>
+  </div>
+  <div id="hint" hidden>Drag the sky to look around</div>
+
+  <div id="intro">
+    <div class="intro-box">
+      <p class="eyebrow">A star chart · drawn for <span data-name></span></p>
+      <h1>The Sky Map <em>of Us</em></h1>
+      <p>Every star on this map is a moment we shared. Follow them in order. The last one is the brightest.</p>
+      <button class="btn gold" id="begin">Find the first star →</button>
+    </div>
+  </div>
+
+  <section id="sheet" class="away" aria-live="polite">
+    <div id="story"></div>
+    <div id="nav">
+      <button class="btn ghost" id="prev" aria-label="Previous star">←</button>
+      <span id="count"></span>
+      <button class="btn" id="next">Next star →</button>
+    </div>
+  </section>
+</div>
+
+<script>
+/* ============================================================
+   EDIT HERE: her name, your name, and your memories in order.
+   photo is optional: put images in a "photos" folder next to
+   this file and write e.g. photo: "photos/first-hello.jpg"
+   ============================================================ */
+const CONFIG = {
+  name: "My Star",
+  from: "Me",
+  memories: [
+    { date: "12 Mar 2022", title: "The first hello", photo: "",
+      note: "I didn't know it yet, but this was the start of my favorite story. You said something funny and I've been trying to keep up ever since." },
+    { date: "02 Jun 2022", title: "That awful coffee", photo: "",
+      note: "The worst coffee either of us ever had, and one of the best afternoons. We stayed until they started stacking chairs." },
+    { date: "19 Sep 2022", title: "The long walk home", photo: "",
+      note: "We missed the last bus and walked instead. You pointed out every star you knew and invented names for the ones you didn't." },
+    { date: "24 Dec 2022", title: "Your surprise", photo: "",
+      note: "You remembered something I said once, months earlier, in passing. Nobody had ever listened to me like that." },
+    { date: "08 Apr 2023", title: "Our first trip", photo: "",
+      note: "Wrong turns, a dead phone, and a sunset that made both of us go quiet. I'd get lost with you again any day." },
+    { date: "14 Aug 2023", title: "The meteor shower", photo: "",
+      note: "Lying on the grass counting shooting stars. You wished on every single one and wouldn't tell me what for." }
+  ],
+  today: {
+    note: "This is the brightest star on the map, because it's the one where you are right now. Thank you for every moment above. Here's to all the stars we haven't found yet."
+  }
+};
+
+const GREEK = "αβγδεζηθικλμνξοπρστυφχψω";
+const PAT = [0.55, 0.15, 0.7, 0.3, 0.85, 0.4, 0.1, 0.6];
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const N = CONFIG.memories.length + 1;           // memories + today
+const LAST = N - 1;
+const mag = i => i === LAST ? "−1.5" : (4.6 - i * (3.6 / Math.max(1, LAST))).toFixed(1);
+
+document.querySelectorAll("[data-name]").forEach(el => el.textContent = CONFIG.name);
+
+const stage = document.getElementById("stage");
+const layer = document.getElementById("layer");
+const cv = document.getElementById("sky");
+const ctx = cv.getContext("2d");
+const sheet = document.getElementById("sheet");
+const story = document.getElementById("story");
+const prevBtn = document.getElementById("prev");
+const nextBtn = document.getElementById("next");
+const countEl = document.getElementById("count");
+const coordsEl = document.getElementById("coords");
+const hint = document.getElementById("hint");
+
+let W = 0, H = 0, DPR = 1, xs = [], ys = [], camX = 0, camTarget = 0, camMin = 0, camMax = 0;
+let current = -1, reached = -1, started = false;
+const segStart = [];
+let bg = [], haze = [], sparks = [];
+
+/* ---------- star buttons ---------- */
+const starEls = Array.from({ length: N }, (_, i) => {
+  const b = document.createElement("button");
+  b.className = "star locked" + (i === LAST ? " today" : "");
+  const m = CONFIG.memories[i];
+  b.innerHTML = '<span class="dot"></span><span class="lab">' +
+    (i === LAST ? "★ Today" : GREEK[i % GREEK.length] + " · " + esc(m.date)) +
+    "<b>" + esc(i === LAST ? "You, right now" : m.title) + "</b></span>";
+  b.addEventListener("click", () => { if (!dragMoved) visit(i); });
+  layer.appendChild(b);
+  return b;
+});
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+/* ---------- layout ---------- */
+function layout() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = stage.clientWidth; H = stage.clientHeight;
+  cv.width = W * DPR; cv.height = H * DPR; ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const spacing = Math.max(280, Math.min(W * 0.55, 520));
+  const top = H * 0.17, band = H * 0.27;
+  xs = []; ys = [];
+  for (let i = 0; i < N; i++) {
+    xs.push(W / 2 + i * spacing);
+    ys.push(i === LAST ? top + band * 0.35 : top + band * PAT[i % PAT.length]);
+    starEls[i].style.left = xs[i] + "px"; starEls[i].style.top = ys[i] + "px";
+  }
+  camMin = -W * 0.25; camMax = xs[LAST] - W / 2 + W * 0.25;
+  if (current >= 0) camX = camTarget = xs[current] - W / 2;
+  const span = W + xs[LAST] * 0.5 + W;
+  bg = Array.from({ length: Math.round(span * H / 4200) }, () => ({
+    x: Math.random() * span - W * 0.5, y: Math.random() * H, r: Math.random() * 1.1 + 0.25,
+    p: Math.random() * 6.28, s: 0.5 + Math.random() * 1.5
+  }));
+  haze = Array.from({ length: 14 }, (_, k) => ({
+    x: (k / 13) * (span * 0.6) - W * 0.3, y: H * (0.75 - 0.5 * (k / 13)) + (Math.random() - 0.5) * H * 0.1,
+    r: H * (0.25 + Math.random() * 0.2)
+  }));
+}
+addEventListener("resize", layout);
+layout();
+
+/* ---------- visiting stars ---------- */
+function visit(i) {
+  if (i < 0 || i > LAST || i > reached + 1) return;
+  if (i > reached) { reached = i; segStart[i] = performance.now(); }
+  current = i;
+  camTarget = xs[i] - W / 2;
+  if (reduce) camX = camTarget;
+  starEls.forEach((el, k) => {
+    el.classList.toggle("locked", k > reached + 1);
+    el.classList.toggle("next", k === reached + 1);
+    el.classList.toggle("current", k === i);
+    el.tabIndex = k > reached + 1 ? -1 : 0;
+    if (k === i) el.setAttribute("aria-current", "true"); else el.removeAttribute("aria-current");
+  });
+  renderStory(i);
+  sheet.classList.remove("away");
+  if (i === LAST) celebrate();
+}
+
+function renderStory(i) {
+  let html;
+  if (i === LAST) {
+    html =
+      '<p class="eyebrow">★ Today · <span class="mag">mag ' + mag(i) + "</span></p>" +
+      "<h2>Happy Birthday, <em>" + esc(CONFIG.name) + "</em></h2>" +
+      "<p>" + esc(CONFIG.today.note) + "</p>" +
+      '<p class="sign">— ' + esc(CONFIG.from) + "</p>" +
+      '<div class="actions"><button class="btn gold" id="song">Play your song ♪</button>' +
+      '<button class="btn ghost" id="restart">See the whole map</button></div>';
+  } else {
+    const m = CONFIG.memories[i];
+    html =
+      '<p class="eyebrow">' + GREEK[i % GREEK.length] + " · " + esc(m.date) + ' · <span class="mag">mag ' + mag(i) + "</span></p>" +
+      "<h2>" + esc(m.title) + "</h2>" +
+      (m.photo ? '<img src="' + esc(m.photo) + '" alt="' + esc(m.title) + '">' : "") +
+      "<p>" + esc(m.note) + "</p>";
+  }
+  story.innerHTML = html;
+  story.scrollTop = 0;
+  story.classList.remove("swap"); void story.offsetWidth; story.classList.add("swap");
+  prevBtn.disabled = i === 0;
+  nextBtn.hidden = i === LAST;
+  nextBtn.textContent = i === LAST - 1 ? "To the brightest star →" : "Next star →";
+  countEl.textContent = i === LAST ? "Today" : "Star " + (i + 1) + " of " + CONFIG.memories.length;
+  if (i === LAST) {
+    document.getElementById("song").addEventListener("click", playSong);
+    document.getElementById("restart").addEventListener("click", overview);
+  }
+}
+
+function overview() {
+  // pan slowly from the first star to today
+  camX = xs[0] - W / 2; camTarget = camX;
+  const t0 = performance.now(), dur = reduce ? 1 : 6000;
+  const from = camX, to = xs[LAST] - W / 2;
+  (function pan(now) {
+    const k = Math.min(1, (now - t0) / dur), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+    camX = camTarget = from + (to - from) * e;
+    if (k < 1) requestAnimationFrame(pan);
+  })(t0);
+}
+
+prevBtn.addEventListener("click", () => visit(current - 1));
+nextBtn.addEventListener("click", () => visit(current + 1));
+document.addEventListener("keydown", e => {
+  if (!started) return;
+  if (e.key === "ArrowRight") visit(current + 1);
+  if (e.key === "ArrowLeft") visit(current - 1);
+});
+document.getElementById("begin").addEventListener("click", () => {
+  started = true;
+  document.getElementById("intro").classList.add("gone");
+  hint.hidden = false;
+  setTimeout(() => hint.style.opacity = 0, 5000);
+  visit(0);
+});
+
+/* ---------- drag / wheel to look around ---------- */
+let dragging = false, dragMoved = false, lastX = 0, downX = 0;
+stage.addEventListener("pointerdown", e => {
+  if (!started || e.target.closest("#sheet")) return;
+  dragging = true; dragMoved = false; lastX = downX = e.clientX;
+});
+addEventListener("pointermove", e => {
+  if (!dragging) return;
+  if (Math.abs(e.clientX - downX) > 6) { dragMoved = true; stage.classList.add("dragging"); }
+  if (dragMoved) { camX = camTarget = clamp(camX - (e.clientX - lastX), camMin, camMax); }
+  lastX = e.clientX;
+});
+addEventListener("pointerup", () => { dragging = false; stage.classList.remove("dragging"); setTimeout(() => dragMoved = false, 0); });
+stage.addEventListener("wheel", e => {
+  if (!started || e.target.closest("#sheet")) return;
+  const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+  camX = camTarget = clamp(camX + d, camMin, camMax);
+}, { passive: true });
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, k) => a + (b - a) * k;
+
+/* ---------- finale ---------- */
+let celebrated = false;
+function celebrate() {
+  const n = reduce ? 40 : 140;
+  for (let k = 0; k < n; k++) {
+    const a = Math.random() * 6.283, sp = 0.6 + Math.random() * 3.4;
+    sparks.push({ wx: xs[LAST], y: ys[LAST], vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1,
+      col: ["#ffd59e", "#fff3d6", "#ffb6c8", "#b9cdff"][k % 4] });
+  }
+  if (!celebrated) { celebrated = true; setTimeout(playSong, 700); }
+}
+
+/* ---------- music box (starts only after a tap) ---------- */
+let actx = null, songPlaying = false;
+function playSong() {
+  try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
+  if (songPlaying) return;
+  if (actx.state === "suspended") actx.resume();
+  const F = { G4: 392, A4: 440, B4: 493.88, C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46, G5: 783.99 };
+  const song = [
+    ["G4",.75],["G4",.25],["A4",1],["G4",1],["C5",1],["B4",2],
+    ["G4",.75],["G4",.25],["A4",1],["G4",1],["D5",1],["C5",2],
+    ["G4",.75],["G4",.25],["G5",1],["E5",1],["C5",1],["B4",1],["A4",2],
+    ["F5",.75],["F5",.25],["E5",1],["C5",1],["D5",1],["C5",2.5]
+  ];
+  let t = actx.currentTime + 0.15;
+  for (const [n, d] of song) {
+    const len = Math.max(d * 0.42 * 1.6, 0.6);
+    const g = actx.createGain();
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.16, t + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0008, t + len); g.connect(actx.destination);
+    [[1, 1], [2, 0.18], [3, 0.06]].forEach(([m, v]) => {
+      const o = actx.createOscillator(), og = actx.createGain();
+      o.frequency.value = F[n] * m; og.gain.value = v; o.connect(og).connect(g);
+      o.start(t); o.stop(t + len + 0.05);
+    });
+    t += d * 0.42;
+  }
+  songPlaying = true;
+  const btn = document.getElementById("song");
+  if (btn) { btn.disabled = true; btn.textContent = "Playing ♪"; }
+  setTimeout(() => {
+    songPlaying = false;
+    const b = document.getElementById("song");
+    if (b) { b.disabled = false; b.textContent = "Play it again ♪"; }
+  }, (t - actx.currentTime) * 1000 + 400);
+}
+
+/* ---------- drawing ---------- */
+function raLabel(k) { const m = k * 30; return "RA " + String(Math.floor(m / 60) % 24).padStart(2, "0") + "h " + String(m % 60).padStart(2, "0") + "m"; }
+
+function frame(now) {
+  if (!reduce) camX = lerp(camX, camTarget, 0.06);
+  layer.style.transform = "translate3d(" + (-camX).toFixed(1) + "px,0,0)";
+  ctx.clearRect(0, 0, W, H);
+
+  // milky way haze (slow parallax)
+  for (const h of haze) {
+    const x = h.x - camX * 0.2;
+    if (x < -h.r || x > W + h.r) continue;
+    const g = ctx.createRadialGradient(x, h.y, 0, x, h.y, h.r);
+    g.addColorStop(0, "rgba(150,140,230,0.07)"); g.addColorStop(1, "rgba(150,140,230,0)");
+    ctx.fillStyle = g; ctx.fillRect(x - h.r, h.y - h.r, h.r * 2, h.r * 2);
+  }
+
+  // background stars (parallax)
+  ctx.fillStyle = "#fffaf0";
+  for (const s of bg) {
+    const x = s.x - camX * 0.5;
+    if (x < -2 || x > W + 2) continue;
+    ctx.globalAlpha = reduce ? 0.6 : 0.35 + 0.4 * Math.sin(now / 1000 * s.s + s.p) ** 2;
+    ctx.beginPath(); ctx.arc(x, s.y, s.r, 0, 6.283); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // chart grid (moves with the map)
+  ctx.strokeStyle = "rgba(190,205,255,0.07)"; ctx.lineWidth = 1;
+  ctx.fillStyle = "rgba(190,205,255,0.32)";
+  ctx.font = '10px "IBM Plex Mono", Consolas, monospace';
+  const step = 200, k0 = Math.floor((camX - 100) / step), k1 = Math.ceil((camX + W + 100) / step);
+  for (let k = k0; k <= k1; k++) {
+    const x = k * step - camX;
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+    if (k >= 0) ctx.fillText(raLabel(k), x + 6, H * 0.6 - 6);
+  }
+  [[0.12, "+60°"], [0.27, "+45°"], [0.42, "+30°"], [0.57, "+15°"]].forEach(([f, lab]) => {
+    const y = H * f;
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    ctx.fillText(lab, 8, y - 5);
+  });
+
+  // constellation path between visited stars
+  ctx.strokeStyle = "rgba(255,213,158,0.6)"; ctx.lineWidth = 1.2;
+  ctx.shadowColor = "rgba(255,213,158,0.6)"; ctx.shadowBlur = 6;
+  for (let k = 1; k <= reached; k++) {
+    const p = reduce ? 1 : clamp((now - segStart[k]) / 1400, 0, 1);
+    const x0 = xs[k - 1] - camX, y0 = ys[k - 1], x1 = xs[k] - camX, y1 = ys[k];
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(lerp(x0, x1, p), lerp(y0, y1, p)); ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+
+  // glow behind the birthday star once reached
+  if (reached === LAST) {
+    const x = xs[LAST] - camX, y = ys[LAST], r = 90 + 12 * Math.sin(now / 600);
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, "rgba(255,213,158,0.35)"); g.addColorStop(1, "rgba(255,213,158,0)");
+    ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+
+  // sparkles
+  if (sparks.length) {
+    ctx.globalCompositeOperation = "lighter";
+    sparks = sparks.filter(p => p.life > 0);
+    for (const p of sparks) {
+      p.vx *= 0.975; p.vy = p.vy * 0.975 + 0.02; p.wx += p.vx; p.y += p.vy; p.life -= 0.008;
+      ctx.globalAlpha = Math.max(0, p.life); ctx.fillStyle = p.col;
+      ctx.beginPath(); ctx.arc(p.wx - camX, p.y, 1.7, 0, 6.283); ctx.fill();
+    }
+    ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
+  }
+
+  // header coordinates follow the view
+  const ra = Math.max(0, (camX + W / 2) / step);
+  coordsEl.innerHTML = raLabel(Math.floor(ra)).replace(/m$/, "m") + "<br>Dec +40°";
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body></html>

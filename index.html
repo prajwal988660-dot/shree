@@ -1,0 +1,519 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><style>body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style></head><body><title>Shree's Sky</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;1,500&family=Figtree:wght@400;600;700&family=Parisienne&display=swap">
+<style>
+/* Layout: one fixed sky that changes as she scrolls (sea, sun, clouds, sunset, moon, Bifrost, new universe). Each line stays on screen for its whole scene; from the Bifrost on, every word is made of stars. */
+:root {
+  --ink: #fff8ef;
+  --ink-soft: rgba(255, 248, 239, 0.8);
+  --gold: #ffd49a;
+  --deep: #04050f;
+  --glass: rgba(10, 10, 34, 0.34);
+  --glass-line: rgba(255, 255, 255, 0.16);
+  --font-display: "Cormorant Garamond", "Iowan Old Style", Georgia, serif;
+  --font-script: "Parisienne", "Segoe Script", cursive;
+  --font-body: "Figtree", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+body { background: var(--deep); color: var(--ink); font-family: var(--font-body); overflow-x: hidden; }
+
+#sky { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; }
+#track { position: relative; height: 1500vh; z-index: 1; }
+
+/* ---------- lines that stay for their whole scene ---------- */
+#lines { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
+.beat {
+  position: absolute; left: 0; right: 0; bottom: calc(15vh + env(safe-area-inset-bottom, 0px));
+  display: flex; justify-content: center; padding-inline: 16px;
+  opacity: 0; will-change: opacity, transform;
+}
+.beat.intro { bottom: auto; top: 50%; translate: 0 -50%; }
+.card {
+  max-width: 30rem; text-align: center;
+  padding: 1.1rem 1.35rem 1.2rem; border-radius: 22px;
+  background: var(--glass); border: 1px solid var(--glass-line);
+  backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px);
+  text-shadow: 0 1px 14px rgba(5, 5, 25, 0.45);
+}
+.kicker { margin: 0 0 .45rem; font-size: .7rem; font-weight: 600; letter-spacing: .22em; text-transform: uppercase; color: var(--gold); }
+.line { margin: 0; font-family: var(--font-display); font-style: italic; font-weight: 500; font-size: clamp(1.45rem, 5.6vw, 2.15rem); line-height: 1.28; text-wrap: balance; }
+.line em { font-style: normal; color: var(--gold); }
+.intro .card { background: transparent; border-color: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.intro .name { margin: .2rem 0 .3rem; font-family: var(--font-script); font-size: clamp(4rem, 19vw, 7.5rem); line-height: 1.05; color: var(--gold); text-shadow: 0 0 30px rgba(255, 190, 120, .45); }
+
+/* ---------- HUD ---------- */
+#where {
+  position: fixed; z-index: 3; right: 16px; top: calc(14px + env(safe-area-inset-top, 0px));
+  font-size: .66rem; font-weight: 600; letter-spacing: .2em; text-transform: uppercase;
+  color: var(--ink-soft); padding: .45rem .7rem; border-radius: 999px;
+  background: rgba(8, 8, 30, .3); border: 1px solid var(--glass-line);
+}
+#hint {
+  position: fixed; z-index: 3; left: 0; right: 0; bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+  text-align: center; font-size: .72rem; font-weight: 600; letter-spacing: .22em; text-transform: uppercase; color: var(--ink-soft);
+  transition: opacity .6s ease; pointer-events: none;
+}
+#hint span { display: block; margin-top: .4rem; font-size: 1.1rem; animation: bob 1.6s ease-in-out infinite; }
+@keyframes bob { 50% { transform: translateY(6px); } }
+
+#end {
+  position: fixed; z-index: 3; left: 0; right: 0; bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-wrap: wrap; justify-content: center; gap: .6rem; padding-inline: 16px;
+  opacity: 0; pointer-events: none; transition: opacity 1.2s ease;
+}
+#end.show { opacity: 1; pointer-events: auto; }
+.btn {
+  font: 600 .92rem/1 var(--font-body); color: #24123a; background: var(--gold);
+  border: 0; border-radius: 999px; padding: .85rem 1.3rem; cursor: pointer;
+  transition: transform .2s ease, opacity .3s ease;
+}
+.btn:hover { transform: translateY(-1px); }
+.btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.btn:disabled { opacity: .5; cursor: default; transform: none; }
+.btn.ghost { background: rgba(8, 8, 30, .35); color: var(--ink); box-shadow: inset 0 0 0 1px var(--glass-line); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01s !important; animation-iteration-count: 1 !important; }
+}
+</style>
+
+<canvas id="sky" aria-hidden="true"></canvas>
+<div id="lines"></div>
+<div id="where">Before sunrise</div>
+<div id="hint">Scroll slowly<span>↓</span></div>
+<div id="end">
+  <button class="btn" id="song">Play your song ♪</button>
+  <button class="btn ghost" id="again">Back to the sea ↑</button>
+</div>
+<main id="track"></main>
+
+<script>
+/* ============================================================
+   EDIT HERE: the name, the lines, and the wishes in the stars.
+   ============================================================ */
+const CONFIG = {
+  name: "...shree",
+  beats: [
+    { from: 0.00, to: 0.045, intro: true, kicker: "A sky made for", line: "Scroll slowly. Let the day begin." },
+    { from: 0.05, to: 0.11, kicker: "Sunrise", line: "Every morning the sun climbs out of the sea, just to see you again." },
+    { from: 0.12, to: 0.17, kicker: "Noon", line: "Bright, warm and impossible to ignore. That's how you feel to everyone who knows you." },
+    { from: 0.185, to: 0.30, kicker: "Above the clouds", line: "Up here everything goes quiet, like every moment I spend thinking of you." },
+    { from: 0.31, to: 0.37, kicker: "Golden hour", line: "The sky turns red and orange, trying to paint something <em>as beautiful as you</em>." },
+    { from: 0.38, to: 0.435, kicker: "Sunset", line: "Even the sun takes its time leaving when you're watching." },
+    { from: 0.45, to: 0.50, kicker: "Moonrise", line: "So the moon takes the night shift, just to keep looking at you." }
+  ],
+  // each wish is written in stars, one after another; the last one stays
+  wishes: [
+    "Happy Birthday",
+    "May this year give you as much light as you give everyone around you",
+    "Keep smiling, the sky is yours today",
+    "Happy Birthday, ...shree"
+  ]
+};
+
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, k) => a + (b - a) * k;
+const ramp = (a, b, x) => { const k = clamp((x - a) / (b - a)); return k * k * (3 - 2 * k); };
+const easeOut = k => 1 - Math.pow(1 - k, 3);
+const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const mix = (a, b, k) => a.map((v, i) => Math.round(lerp(v, b[i], k)));
+const rgb = (c, a = 1) => "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + a + ")";
+
+/* ---------- lines ---------- */
+const linesBox = document.getElementById("lines");
+const beatEls = CONFIG.beats.map(b => {
+  const el = document.createElement("div");
+  el.className = "beat" + (b.intro ? " intro" : "");
+  el.innerHTML = '<div class="card"><p class="kicker">' + b.kicker + "</p>" +
+    (b.intro ? '<p class="name">' + CONFIG.name + "</p>" : "") +
+    '<p class="line">' + b.line + "</p></div>";
+  linesBox.appendChild(el);
+  return el;
+});
+function updateLines(p) {
+  CONFIG.beats.forEach((b, i) => {
+    const fadeIn = b.from === 0 ? 1 : ramp(b.from - .012, b.from + .008, p);
+    const fadeOut = ramp(b.to - .008, b.to + .006, p);
+    const a = fadeIn * (1 - fadeOut);
+    const el = beatEls[i];
+    el.style.opacity = a.toFixed(3);
+    el.style.transform = "translateY(" + ((1 - fadeIn) * 18 - fadeOut * 18).toFixed(1) + "px)";
+  });
+}
+
+/* ---------- canvas ---------- */
+const cv = document.getElementById("sky"), ctx = cv.getContext("2d");
+let W = 0, H = 0, DPR = 1, P = 0, T = 0;
+
+const KF = [
+  [0.00, "#070b26", "#2b2550", "#a85a6a"],
+  [0.05, "#1c2a63", "#8b5a86", "#ff9c78"],
+  [0.10, "#3a64b0", "#e3a080", "#ffd9a0"],
+  [0.15, "#2f7fd0", "#7db6e8", "#e8f3fb"],
+  [0.24, "#5b9be0", "#bcdcf5", "#ffffff"],
+  [0.31, "#6b5aa8", "#f08a6a", "#ffc27a"],
+  [0.36, "#4a2368", "#e0503c", "#ff9a3a"],
+  [0.42, "#1f1a4a", "#9c2f55", "#ff6a3a"],
+  [0.48, "#050818", "#101845", "#2a2a5e"],
+  [0.55, "#020208", "#05041a", "#0a0620"],
+  [0.66, "#080320", "#1e0b40", "#2a0c3c"],
+  [1.00, "#080320", "#1e0b40", "#2a0c3c"]
+].map(([p, a, b, c]) => [p, hex(a), hex(b), hex(c)]);
+function skyAt(p) {
+  let i = 0; while (i < KF.length - 2 && p > KF[i + 1][0]) i++;
+  const [p0, a0, b0, c0] = KF[i], [p1, a1, b1, c1] = KF[i + 1];
+  const k = ramp(p0, p1, p);
+  return [mix(a0, a1, k), mix(b0, b1, k), mix(c0, c1, k)];
+}
+const PLACES = [[0, "Before sunrise"], [0.05, "Sunrise"], [0.12, "Noon"], [0.18, "Into the clouds"], [0.31, "Golden hour"], [0.38, "Sunset"], [0.445, "Moonrise"], [0.51, "Bifrost"], [0.64, "Another universe"]];
+
+const rnd = (() => { let s = 7; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();
+const stars = Array.from({ length: 280 }, () => ({ x: rnd(), y: rnd(), r: rnd() * 1.2 + .3, p: rnd() * 6.3, s: .5 + rnd() * 1.5 }));
+const bank = Array.from({ length: 9 }, () => ({ x: rnd(), y: rnd(), s: .7 + rnd() * .7, v: .004 + rnd() * .006 }));
+const fly = Array.from({ length: 46 }, () => ({ x: rnd() * 2 - 1, y: rnd() * 2 - 1, z: rnd() }));
+const streaks = Array.from({ length: 240 }, () => ({ a: rnd() * 6.283, r: rnd(), v: .25 + rnd() * .6, h: rnd() * 360, w: .6 + rnd() * 1.8 }));
+const galaxy = Array.from({ length: 520 }, (_, i) => {
+  const r = Math.pow(rnd(), .7);
+  return { r, a: (i % 3) * 2.094 + r * 5 + (rnd() - .5) * .6, c: rnd() };
+});
+const nebula = [[.18, .25, "#7b3fe4"], [.82, .2, "#ff5fa2"], [.6, .75, "#2ad1c9"], [.22, .78, "#ff9a3a"], [.5, .45, "#5a3fff"]].map(([x, y, c]) => ({ x, y, c: hex(c) }));
+
+function cloudSprite(c1, c2) {
+  const c = document.createElement("canvas"); c.width = 360; c.height = 180;
+  const g = c.getContext("2d");
+  [[90, 110, 60], [150, 85, 72], [215, 92, 66], [270, 115, 52], [180, 120, 70], [120, 125, 50]].forEach(([x, y, r]) => {
+    const gr = g.createRadialGradient(x, y - r * .25, 0, x, y, r);
+    gr.addColorStop(0, c1); gr.addColorStop(.6, c2); gr.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, 6.283); g.fill();
+  });
+  return c;
+}
+const CLOUD_WHITE = cloudSprite("rgba(255,255,255,.95)", "rgba(240,246,255,.6)");
+const CLOUD_WARM = cloudSprite("rgba(255,214,190,.95)", "rgba(255,140,120,.55)");
+
+/* ---------- words made of stars ---------- */
+// Timeline: name flies out of the Bifrost slowly, then each wish in turn.
+const NAME_FROM = 0.575, NAME_TO = 0.72;
+const WISH_FROM = 0.72;
+let nameDots = [], wishDots = [];
+
+function textDots(text, font, size, maxW, cx, cy, step, weight = "") {
+  const g0 = document.createElement("canvas").getContext("2d");
+  g0.font = weight + size + "px " + font;
+  const words = text.split(" "), lines = [];
+  let cur = "";
+  for (const w of words) {
+    const test = cur ? cur + " " + w : w;
+    if (g0.measureText(test).width > maxW && cur) { lines.push(cur); cur = w; } else cur = test;
+  }
+  lines.push(cur);
+  const lh = size * 1.3, cw = Math.ceil(maxW + size), ch = Math.ceil(lines.length * lh + size * .6);
+  const c = document.createElement("canvas"); c.width = cw; c.height = ch;
+  const g = c.getContext("2d");
+  g.font = weight + size + "px " + font; g.fillStyle = "#fff"; g.textAlign = "center"; g.textBaseline = "middle";
+  lines.forEach((l, i) => g.fillText(l, cw / 2, size * .3 + lh * (i + .5)));
+  const d = g.getImageData(0, 0, cw, ch).data, pts = [];
+  for (let y = 0; y < ch; y += step) for (let x = 0; x < cw; x += step) {
+    if (d[(Math.floor(y) * cw + Math.floor(x)) * 4 + 3] > 130) {
+      pts.push({
+        tx: cx - cw / 2 + x, ty: cy - ch / 2 + y,
+        jx: (rnd() - .5) * 30, jy: (rnd() - .5) * 30,
+        d: rnd(), h: rnd() * 360, sw: (rnd() - .5) * 2, p: rnd() * 6.3,
+        ex: (rnd() - .5) * 160, ey: -40 - rnd() * 140
+      });
+    }
+  }
+  return pts;
+}
+function buildDots() {
+  let size = Math.min(W * .34, 240);
+  const g0 = document.createElement("canvas").getContext("2d");
+  g0.font = size + "px Parisienne";
+  const nw = g0.measureText(CONFIG.name).width;
+  if (nw > W * .9) size *= W * .9 / nw;
+  nameDots = textDots(CONFIG.name, 'Parisienne, "Segoe Script", cursive', size, W * .92, W / 2, H * .22, Math.max(3, size / 48));
+  const ws = Math.max(26, Math.min(W * .07, 54));
+  wishDots = CONFIG.wishes.map(w => textDots(w, 'Figtree, "Segoe UI", sans-serif', ws, Math.min(W * .88, 820), W / 2, H * .58, Math.max(2.4, ws / 12), "700 "));
+}
+function layout() {
+  DPR = Math.min(window.devicePixelRatio || 1, 1.75);
+  W = innerWidth; H = innerHeight;
+  cv.width = W * DPR; cv.height = H * DPR; ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  buildDots();
+}
+addEventListener("resize", layout);
+
+// draw a set of dots flying from the portal (ox, oy) to their places
+function drawDots(dots, kIn, kOut, ox, oy, big) {
+  if (kIn <= 0) return;
+  for (const s of dots) {
+    // each dot leaves the portal at its own moment: slow, staggered
+    const k = clamp((kIn - s.d * .55) / .45);
+    if (k <= 0) continue;
+    const e = easeOut(k);
+    let x = lerp(ox + s.jx, s.tx, e) + Math.sin(k * Math.PI) * s.sw * 90;
+    let y = lerp(oy + s.jy, s.ty, e) + Math.sin(k * Math.PI) * s.sw * 30;
+    let a = clamp(k * 3);
+    if (kOut > 0) { x += s.ex * kOut; y += s.ey * kOut; a *= 1 - kOut; }
+    if (a <= .01) continue;
+    const tw = reduce ? 1 : .7 + .3 * Math.sin(T * 2 + s.p);
+    const flight = 1 - k;
+    const r = (big ? 2.1 : 1.35) + flight * 2.2;
+    const col = flight > .02 ? "hsla(" + ((s.h + T * 60) % 360) + ",95%," + (72 + 20 * (1 - flight)) + "%," : "rgba(255,244,222,";
+    ctx.fillStyle = col + (a * .2 * tw) + ")";
+    ctx.beginPath(); ctx.arc(x, y, r * 2.6, 0, 6.283); ctx.fill();
+    ctx.fillStyle = col + (a * tw) + ")";
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill();
+  }
+}
+
+function frame(now) {
+  T = now / 1000;
+  const p = P;
+  const [top, mid, hor] = skyAt(p);
+  const horizon = H * .68 + H * .6 * (ramp(.18, .22, p) - ramp(.28, .32, p));
+  const seaA = 1 - ramp(.56, .63, p);
+
+  // sky
+  let g = ctx.createLinearGradient(0, 0, 0, Math.max(horizon, H * .4));
+  g.addColorStop(0, rgb(top)); g.addColorStop(.6, rgb(mid)); g.addColorStop(1, rgb(hor));
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+  // stars
+  const night = (1 - ramp(0, .06, p)) * .8 + ramp(.42, .49, p);
+  if (night > .01) {
+    ctx.fillStyle = "#fffaf0";
+    for (const s of stars) {
+      ctx.globalAlpha = night * (reduce ? .7 : .4 + .6 * Math.sin(T * s.s + s.p) ** 2);
+      ctx.beginPath(); ctx.arc(s.x * W, s.y * Math.min(horizon, H), s.r, 0, 6.283); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // sun
+  const rise = ramp(.02, .15, p), set = ramp(.31, .43, p), lift = clamp(rise - set);
+  const sunA = 1 - ramp(.42, .46, p);
+  const sunX = W * (.42 + .16 * set), sunY = horizon - H * .52 * (1 - (1 - lift) ** 2) + H * .02;
+  const sunR = Math.min(W, H) * .075 * (1 + .4 * (1 - lift));
+  const sunCol = mix(hex("#ff4a24"), hex("#fff2c6"), lift);
+  if (sunA > .01) {
+    g = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, sunR * 6);
+    g.addColorStop(0, rgb(mix(sunCol, [255, 255, 255], .2), .55 * sunA)); g.addColorStop(1, rgb(sunCol, 0));
+    ctx.fillStyle = g; ctx.fillRect(sunX - sunR * 6, sunY - sunR * 6, sunR * 12, sunR * 12);
+    ctx.globalAlpha = sunA; ctx.fillStyle = rgb(sunCol);
+    ctx.beginPath(); ctx.arc(sunX, sunY, sunR, 0, 6.283); ctx.fill(); ctx.globalAlpha = 1;
+  }
+
+  // moon
+  const moonA = ramp(.44, .49, p) * (1 - ramp(.56, .61, p));
+  const moonX = W * .72, moonY = horizon - H * .44 * (1 - (1 - ramp(.43, .52, p)) ** 2) + H * .03;
+  const moonR = Math.min(W, H) * .06;
+  if (moonA > .01) {
+    g = ctx.createRadialGradient(moonX, moonY, 0, moonX, moonY, moonR * 5);
+    g.addColorStop(0, "rgba(220,225,255," + .35 * moonA + ")"); g.addColorStop(1, "rgba(220,225,255,0)");
+    ctx.fillStyle = g; ctx.fillRect(moonX - moonR * 5, moonY - moonR * 5, moonR * 10, moonR * 10);
+    ctx.globalAlpha = moonA;
+    g = ctx.createRadialGradient(moonX - moonR * .3, moonY - moonR * .3, 0, moonX, moonY, moonR);
+    g.addColorStop(0, "#fffdf2"); g.addColorStop(1, "#d9d6c8");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(moonX, moonY, moonR, 0, 6.283); ctx.fill();
+    ctx.fillStyle = "rgba(150,145,140,.28)";
+    [[.3, -.2, .22], [-.25, .25, .16], [.1, .4, .12], [-.35, -.3, .1]].forEach(([dx, dy, r]) => {
+      ctx.beginPath(); ctx.arc(moonX + dx * moonR, moonY + dy * moonR, r * moonR, 0, 6.283); ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+  }
+
+  // cloud banks
+  const bankA = ramp(.1, .15, p) * (1 - ramp(.18, .2, p)) + ramp(.29, .32, p) * (1 - ramp(.41, .45, p));
+  if (bankA > .01) {
+    const warm = ramp(.29, .35, p);
+    for (const c of bank) {
+      const w = W * .42 * c.s + 160, h = w / 2;
+      const x = ((c.x * (W + w * 2) + T * c.v * 400) % (W + w * 2)) - w;
+      const y = H * .1 + c.y * (Math.min(horizon, H) - H * .2) - h / 2;
+      ctx.globalAlpha = bankA * (1 - warm) * .9; ctx.drawImage(CLOUD_WHITE, x, y, w, h);
+      ctx.globalAlpha = bankA * warm * .9; ctx.drawImage(CLOUD_WARM, x, y, w, h);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // sea
+  if (horizon < H && seaA > .01) {
+    const seaTop = mix(hor, hex("#0b1236"), .45), seaBot = mix(top, [0, 0, 6], .55);
+    ctx.globalAlpha = seaA;
+    g = ctx.createLinearGradient(0, horizon, 0, H);
+    g.addColorStop(0, rgb(seaTop)); g.addColorStop(1, rgb(seaBot));
+    ctx.fillStyle = g; ctx.fillRect(0, horizon, W, H - horizon);
+    const depth = H - horizon;
+    for (let i = 0; i < 26; i++) {
+      const k = i / 26, y = horizon + Math.pow(k, 1.5) * depth;
+      ctx.fillStyle = "rgba(255,255,255," + (.05 * (1 - k)) + ")";
+      ctx.fillRect(0, y, W, 1);
+      if (sunA > .01) {
+        const w = sunR * (1.3 + i * .18) * (.55 + .45 * Math.sin(T * 2 + i * 1.7));
+        ctx.fillStyle = rgb(sunCol, .55 * (1 - k) * sunA);
+        ctx.fillRect(sunX - w / 2, y, w, 2 + k * 2);
+      }
+      if (moonA > .01) {
+        const w = moonR * (1 + i * .12) * (.55 + .45 * Math.sin(T * 1.6 + i * 2.1));
+        ctx.fillStyle = "rgba(230,232,255," + .4 * (1 - k) * moonA + ")";
+        ctx.fillRect(moonX - w / 2, y, w, 2);
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // flying through the clouds
+  const flyA = ramp(.18, .21, p) * (1 - ramp(.29, .32, p));
+  if (flyA > .01) {
+    const f = ramp(.18, .32, p);
+    const list = fly.map(c => ({ c, d: (((c.z - f * 3) % 1) + 1) % 1 })).sort((a, b) => b.d - a.d);
+    for (const { c, d } of list) {
+      const s = 1 / (d * 4 + .18), w = W * .32 * s, h = w / 2;
+      ctx.globalAlpha = flyA * clamp(d * 4) * clamp((1 - d) * 3) * .85;
+      ctx.drawImage(CLOUD_WHITE, W / 2 + c.x * W * .3 * s - w / 2, H / 2 + c.y * H * .25 * s - h / 2, w, h);
+    }
+    ctx.globalAlpha = 1;
+    const wash = ramp(.22, .25, p) * (1 - ramp(.25, .29, p));
+    if (wash > .01) { ctx.fillStyle = "rgba(255,255,255," + .45 * wash + ")"; ctx.fillRect(0, 0, W, H); }
+  }
+
+  // Bifrost: a beam of rainbow light strikes the sea, then opens into a tunnel
+  const cx = W / 2, cy = H * .42;
+  const beam = ramp(.5, .53, p) * (1 - ramp(.56, .6, p));
+  if (beam > .01) {
+    const bw = Math.min(W, H) * (.03 + .1 * ramp(.5, .56, p));
+    g = ctx.createLinearGradient(cx - bw, 0, cx + bw, 0);
+    ["#ff3b6b", "#ff9a3a", "#ffe45c", "#5cff9a", "#4cc3ff", "#8a5cff", "#ff3b6b"].forEach((c, i) => g.addColorStop(i / 6, c));
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = beam * .75; ctx.fillStyle = g; ctx.fillRect(cx - bw, 0, bw * 2, H);
+    g = ctx.createRadialGradient(cx, horizon, 0, cx, horizon, bw * 6);
+    g.addColorStop(0, "rgba(255,255,255,.8)"); g.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.globalAlpha = beam; ctx.fillStyle = g; ctx.fillRect(cx - bw * 6, horizon - bw * 6, bw * 12, bw * 12);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
+  }
+  const bif = ramp(.54, .58, p) * (1 - ramp(.7, .76, p));
+  if (bif > .01) {
+    const diag = Math.hypot(W, H) * .75;
+    ctx.fillStyle = "rgba(2,2,10," + .55 * bif + ")"; ctx.fillRect(0, 0, W, H);
+    ctx.globalCompositeOperation = "lighter";
+    const speed = reduce ? 0 : 1;
+    for (const s of streaks) {
+      const r = ((s.r + T * s.v * .3 * speed + p * 4) % 1);
+      const a = s.a + T * .22 * speed + r * 1.6;
+      const r0 = r * r * diag, r1 = r0 + (20 + 140 * r) * bif;
+      ctx.strokeStyle = "hsla(" + ((s.h + T * 40) % 360) + ",95%,65%," + (bif * r * .85) + ")";
+      ctx.lineWidth = s.w * (.5 + r * 2);
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
+      ctx.lineTo(cx + Math.cos(a + .05) * r1, cy + Math.sin(a + .05) * r1);
+      ctx.stroke();
+    }
+    ctx.globalCompositeOperation = "source-over";
+    const flash = ramp(.565, .575, p) * (1 - ramp(.575, .6, p));
+    if (flash > .01) { ctx.fillStyle = "rgba(255,255,255," + .75 * flash + ")"; ctx.fillRect(0, 0, W, H); }
+  }
+
+  // another universe
+  const uni = ramp(.6, .67, p);
+  if (uni > .01) {
+    for (const n of nebula) {
+      const r = Math.max(W, H) * .45;
+      g = ctx.createRadialGradient(n.x * W, n.y * H, 0, n.x * W, n.y * H, r);
+      g.addColorStop(0, rgb(n.c, .2 * uni)); g.addColorStop(1, rgb(n.c, 0));
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    }
+    ctx.fillStyle = "#fff";
+    for (const s of stars) {
+      ctx.globalAlpha = uni * (reduce ? .8 : .45 + .55 * Math.sin(T * s.s + s.p) ** 2);
+      ctx.beginPath(); ctx.arc(((s.x * 1.7) % 1) * W, ((s.y * 2.3) % 1) * H, s.r * .8, 0, 6.283); ctx.fill();
+    }
+    const gx = W * .5, gy = H * .82, gr = Math.min(W, H) * .5, rot = reduce ? 0 : T * .04;
+    ctx.globalCompositeOperation = "lighter";
+    for (const s of galaxy) {
+      const a = s.a + rot;
+      ctx.globalAlpha = uni * (1 - s.r) * .5;
+      ctx.fillStyle = s.c < .5 ? "#ffd9b0" : s.c < .8 ? "#c9b6ff" : "#9ff0ff";
+      ctx.fillRect(gx + Math.cos(a) * s.r * gr, gy + Math.sin(a) * s.r * gr * .32, 1.6, 1.6);
+    }
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
+  }
+
+  // the portal glow stays where the words come from
+  const portal = ramp(.55, .6, p) * (1 - ramp(.97, 1, p) * .6);
+  if (portal > .01) {
+    const pr = Math.min(W, H) * .16 * (1 + .08 * Math.sin(T * 1.5));
+    g = ctx.createRadialGradient(cx, cy, 0, cx, cy, pr);
+    g.addColorStop(0, "rgba(255,255,255," + .5 * portal + ")");
+    g.addColorStop(.35, "hsla(" + ((T * 50) % 360) + ",95%,70%," + .3 * portal + ")");
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.globalCompositeOperation = "lighter";
+    ctx.fillStyle = g; ctx.fillRect(cx - pr, cy - pr, pr * 2, pr * 2);
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  // words in the stars, born from the Bifrost
+  ctx.globalCompositeOperation = "lighter";
+  drawDots(nameDots, clamp((p - NAME_FROM) / (NAME_TO - NAME_FROM)), 0, cx, cy, true);
+  const n = wishDots.length, slot = (1 - WISH_FROM) / n;
+  wishDots.forEach((dots, i) => {
+    const s0 = WISH_FROM + i * slot;
+    const kIn = clamp((p - s0) / (slot * .5));
+    const kOut = i === n - 1 ? 0 : clamp((p - (s0 + slot * .78)) / (slot * .22));
+    drawDots(dots, kIn, kOut, cx, cy, false);
+  });
+  ctx.globalCompositeOperation = "source-over";
+
+  requestAnimationFrame(frame);
+}
+
+/* ---------- scroll ---------- */
+const where = document.getElementById("where"), hint = document.getElementById("hint"), endBar = document.getElementById("end");
+const track = document.getElementById("track");
+function onScroll() {
+  P = clamp(scrollY / (track.offsetHeight - innerHeight));
+  hint.style.opacity = P > .012 ? 0 : 1;
+  let label = PLACES[0][1];
+  for (const [at, name] of PLACES) if (P >= at) label = name;
+  if (P > .97) label = "Happy Birthday";
+  if (where.textContent !== label) where.textContent = label;
+  endBar.classList.toggle("show", P > .97);
+  updateLines(P);
+}
+addEventListener("scroll", onScroll, { passive: true });
+
+/* ---------- music box ---------- */
+let actx = null, playing = false;
+function playSong() {
+  try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
+  if (playing) return;
+  if (actx.state === "suspended") actx.resume();
+  const F = { G4: 392, A4: 440, B4: 493.88, C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46, G5: 783.99 };
+  const song = [["G4",.75],["G4",.25],["A4",1],["G4",1],["C5",1],["B4",2],["G4",.75],["G4",.25],["A4",1],["G4",1],["D5",1],["C5",2],
+    ["G4",.75],["G4",.25],["G5",1],["E5",1],["C5",1],["B4",1],["A4",2],["F5",.75],["F5",.25],["E5",1],["C5",1],["D5",1],["C5",2.5]];
+  let t = actx.currentTime + .15;
+  for (const [nn, d] of song) {
+    const len = Math.max(d * .42 * 1.6, .6), gn = actx.createGain();
+    gn.gain.setValueAtTime(0, t); gn.gain.linearRampToValueAtTime(.16, t + .015);
+    gn.gain.exponentialRampToValueAtTime(.0008, t + len); gn.connect(actx.destination);
+    [[1, 1], [2, .18], [3, .06]].forEach(([m, v]) => {
+      const o = actx.createOscillator(), og = actx.createGain();
+      o.frequency.value = F[nn] * m; og.gain.value = v; o.connect(og).connect(gn); o.start(t); o.stop(t + len + .05);
+    });
+    t += d * .42;
+  }
+  playing = true;
+  const btn = document.getElementById("song"); btn.disabled = true; btn.textContent = "Playing ♪";
+  setTimeout(() => { playing = false; btn.disabled = false; btn.textContent = "Play it again ♪"; }, (t - actx.currentTime) * 1000 + 400);
+}
+document.getElementById("song").addEventListener("click", playSong);
+document.getElementById("again").addEventListener("click", () => scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" }));
+
+/* ---------- start ---------- */
+layout(); onScroll();
+document.fonts?.ready.then(() => Promise.all([document.fonts.load("100px Parisienne"), document.fonts.load("700 40px Figtree")])).then(layout).catch(() => {});
+requestAnimationFrame(frame);
+</script>
+</body></html>
